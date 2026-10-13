@@ -1,6 +1,10 @@
 """The crew as a graph: nodes are agents, edges are who goes next."""
 from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
+from config import MAX_DRAFTS
+from researcher import research
+from writer import write_guide
+from reviewer import review_draft
 
 
 # The state is the shared notebook every agent reads and writes.
@@ -12,26 +16,29 @@ class CrewState(TypedDict):
     drafts: int      # how many drafts the writer has made
 
 
-# ---------- Fake agents for now ----------
+# ---------- Real agents ----------
 def researcher(state: CrewState) -> dict:
-    return {"notes": f"(fake notes about {state['topic']})"}
+    notes, used = research(state["topic"])
+    if not used:
+        print("    (warning: the researcher used no tools, so notes may be made up)")
+    return {"notes": notes}
 
 
 def writer(state: CrewState) -> dict:
-    n = state["drafts"] + 1
-    return {"draft": f"(fake draft #{n})", "drafts": n}
+    draft = write_guide(state["topic"], state["notes"], state["draft"], state["feedback"])
+    return {"draft": draft, "drafts": state["drafts"] + 1}
 
 
 def reviewer(state: CrewState) -> dict:
-    # Pretend: reject the first draft, approve the second
-    if state["drafts"] >= 2:
+    review = review_draft(state["draft"], state["notes"])
+    if review.approved:
         return {"feedback": "APPROVED"}
-    return {"feedback": "Add a worked example."}
+    return {"feedback": "\n".join(f"- {p}" for p in review.problems)}
 
 
 # ---------- Where to go after the reviewer ----------
 def after_review(state: CrewState) -> str:
-    if state["feedback"] == "APPROVED" or state["drafts"] >= 3:
+    if state["feedback"] == "APPROVED" or state["drafts"] >= MAX_DRAFTS:
         return "done"
     return "revise"
 
