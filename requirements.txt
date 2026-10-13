@@ -3,3 +3,4 @@ ollama
 chromadb
 pypdf
 ddgs
+pydantic
